@@ -1,1 +1,107 @@
 
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lector QR</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 20px;
+      text-align: center;
+      color: #222;
+    }
+    h2 { margin-bottom: 8px; }
+    p { line-height: 1.5; }
+    #lector { width: 100%; margin: 20px auto; }
+    #estado { padding: 12px; background: #f1f3f4; border-radius: 8px; }
+    button {
+      padding: 12px 18px;
+      margin: 8px;
+      font-size: 16px;
+      border: 0;
+      border-radius: 8px;
+      background: #1769aa;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <h2>Escáner QR</h2>
+  <p>Apunta la cámara al código QR que quieres leer.</p>
+  <div id="estado">Preparando la cámara…</div>
+  <div id="lector"></div>
+  <button id="reintentar" hidden>Volver a escanear</button>
+
+  <script>
+    const estado = document.getElementById("estado");
+    const boton = document.getElementById("reintentar");
+    let scanner = null;
+    let ocupado = false;
+
+    async function iniciar() {
+      ocupado = false;
+      boton.hidden = true;
+      estado.textContent = "Solicitando acceso a la cámara…";
+
+      try {
+        if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+          throw new Error("Abre esta página mediante su dirección HTTPS de GitHub Pages.");
+        }
+
+        if (!scanner) {
+          scanner = new Html5Qrcode("lector");
+        }
+
+        await scanner.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1
+          },
+          async (texto) => {
+            if (ocupado) return;
+            ocupado = true;
+            estado.textContent = "QR leído. Enviando resultado…";
+
+            try {
+              await scanner.stop();
+            } catch (_) {}
+
+            if (window.opener && !window.opener.closed) {
+              window.opener.postMessage(
+                { type: "QR_BRIDGE_RESULT", text: texto },
+                "https://script.google.com"
+              );
+              estado.textContent = "Resultado enviado. Puedes cerrar esta ventana.";
+              setTimeout(() => window.close(), 800);
+            } else {
+              estado.textContent =
+                "QR leído: " + texto +
+                ". No se encontró la ventana de la aplicación que lo abrió.";
+              boton.hidden = false;
+            }
+          },
+          () => {}
+        );
+
+        estado.textContent = "Cámara activa. Enfoca el código QR.";
+      } catch (error) {
+        estado.textContent =
+          "No se pudo iniciar la cámara: " +
+          (error.message || error) +
+          ". Comprueba los permisos de cámara del navegador.";
+        boton.hidden = false;
+      }
+    }
+
+    boton.addEventListener("click", iniciar);
+    iniciar();
+  </script>
+</body>
+</html>
